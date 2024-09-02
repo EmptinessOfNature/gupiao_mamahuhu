@@ -148,3 +148,96 @@ def duanxian(data):
         return data
     except:
         print("短线操盘error")
+
+def draw_line(data, code="",comment=""):
+    long_buy_signals = data[data.long_buy > 0].reset_index(drop=True)
+    short_buy_signals = data[data.short_buy > 0].reset_index(drop=True)
+    long_sell_signals = data[data.long_sell > 0].reset_index(drop=True)
+    short_sell_signals = data[data.short_sell > 0].reset_index(drop=True)
+    # long_profit_rates = data[data.long_sell>0].reset_index(drop=True)
+
+    kline_1D = go.Candlestick(
+        x=data["dt_period"],
+        open=data["open"],
+        high=data["high"],
+        low=data["low"],
+        close=data["close"],
+    )
+    trace_long_buy = go.Scatter(
+        x=long_buy_signals["dt_period"],
+        y=long_buy_signals["close"] * 0.9,
+        text=[
+            "{:.1f}%".format(p * 100) for p in np.array(long_buy_signals["profit_rate"])
+        ],
+        textposition="bottom center",
+        textfont=dict(size=16, color="black"),
+        mode="markers+text",
+        marker=dict(symbol="triangle-up", size=10),
+        name="做多",
+    )
+    trace_short_buy = go.Scatter(
+        x=short_buy_signals["dt_period"],
+        y=short_buy_signals["close"] * 1.2,
+        text=[
+            "{:.1f}%".format(p * 100)
+            for p in np.array(short_buy_signals["profit_rate"])
+        ],
+        textposition="bottom center",
+        textfont=dict(size=16, color="black"),
+        mode="markers+text",
+        marker=dict(symbol="triangle-down", size=10),
+        name="做空",
+    )
+
+    trace_long_sell = go.Scatter(
+        x=long_sell_signals["dt_period"],
+        y=long_sell_signals["close"] * 0.9,
+        mode="markers",
+        marker=dict(symbol="arrow-down", size=10),
+        name="多单结束",
+    )
+    trace_short_sell = go.Scatter(
+        x=short_sell_signals["dt_period"],
+        y=short_sell_signals["close"] * 1.2,
+        mode="markers",
+        marker=dict(symbol="arrow-up", size=10),
+        name="空单结束",
+    )
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        # row_heights=[1,0.5,0.5,0.5],
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        subplot_titles=(""),
+        row_width=[1, 1],
+    )
+
+    # fig = go.Figure(data=[kline_1D, trace_long_buy, trace_short_buy])
+    fig.add_trace(kline_1D, row=1, col=1)
+    fig.add_trace(trace_long_buy, row=1, col=1)
+    fig.add_trace(trace_short_buy, row=1, col=1)
+    fig.add_trace(trace_long_sell, row=1, col=1)
+    fig.add_trace(trace_short_sell, row=1, col=1)
+    fig.add_trace(go.Scatter(x=data["dt_period"], y=data["m1"]), row=2, col=1)
+    fig.add_trace(go.Scatter(x=data["dt_period"], y=data["m2"]), row=2, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=long_buy_signals["dt_period"], y=[0] * len(long_buy_signals), mode="markers"
+        ),
+        row=2,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=short_buy_signals["dt_period"], y=[0] * len(short_buy_signals), mode="markers"
+        ),
+        row=2,
+        col=1,
+    )
+
+    fig.update_layout(xaxis_rangeslider_visible=False)
+    fig.update_layout(title_text=code+comment)
+    print(len(long_buy_signals), len(short_buy_signals))
+    fig.write_image("./data_huice/" + code + "_fig.jpg",width=2000,height=1000)
+    fig.show()
