@@ -1,7 +1,8 @@
 import pandas as pd
 
 from macd_utils import tdx_raw2_kline, double_macd, jw, duanxian
-
+from lightweight_charts import Chart
+from gen_page import gen_html
 
 def is_chuan(data, col, pre_len, post_len, thresh, direction):
     def _is_chuan_up(row, col, pre_len, post_len, thresh):
@@ -108,29 +109,29 @@ def merge_signal(data):
     long_end_rules.append(speed(data,col='m2',length=2).abs()<0.01)
     long_end = condition_or(long_end_rules)
 
-    # # 做空开单条件
-    #
-    # short_rules.append(
-    #     data.loc[i, "m1"] < 0
-    #     and abs(data.loc[i, "m1"]) > 1
-    #     and is_chuan(data, i, "m2", 1, 1, "down", 0)
-    #     and speed_abs(data, i, "m2", 2) > 0.1
-    # )
-    # short_rules.append(
-    #     data.loc[i, "m1"] < 0
-    #     and abs(data.loc[i, "m1"]) > 1
-    #     and data.loc[i, "m2"] > 0
-    #     and is_v(data, i, "m2", 3, 3, "top")
-    #     and abs(data.loc[i, 'm2']) > 0.5
-    #     and abs(data.loc[i, "m1"]) >= 2 * abs(data.loc[i, "m2"])
-    # )
-    # # 做空止盈止损条件
-    #
-    # short_stop_rules.append(is_chuan(data, i, "m2", 1, 1, "up", 0))
-    # short_stop_rules.append(is_v(data, i, "m2", 3, 3, "bottom"))
-    # short_stop_rules.append(speed_abs(data, i, "m2", 2) < 0.01)
-    #
-    # 空仓开仓策略
+    # 开空仓策略
+    short_start_rules = []
+    short_start_rules.append(
+        (data["m1"] < 0)
+        & (data["m1"].abs() > 1)
+        & (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="down"))
+        & (speed(data, col="m2", length=2) > 0.1)
+    )
+    short_start_rules.append(
+        (data["m1"] < 0)
+        & (data["m1"].abs() > 1)
+        & (data['m2']<0)
+        & (is_v(data,col='m2',pre_len=3,post_len=3,direction='top'))
+        & (data['m1'].abs()>=2*data['m2'].abs())
+    )
+    short_start = condition_or(short_start_rules)
+
+    # 平空仓策略
+    short_end_rules = []
+    short_end_rules.append((is_chuan(data,col='m2',pre_len=1,post_len=1,thresh=0,direction='up')))
+    short_end_rules.append((is_v(data,col='m2',pre_len=3,post_len=3,direction='bottom')))
+    short_end_rules.append(speed(data,col='m2',length=2).abs()<0.01)
+    short_end = condition_or(short_end_rules)
 
 
     return data
@@ -143,4 +144,27 @@ if __name__ == "__main__":
     data = jw(data)
     data = duanxian(data)
     data = merge_signal(data)
+
     print(1)
+    # data_plot = data[['dt','open','high','low','close','vol','m1']]
+    # data_plot.columns=['time','open','high','low','close','volume','m1']
+    # data_plot['time'] = data_plot.time.dt.strftime('%Y-%m-%dT%H:%M')
+    # chart = Chart(inner_width=1, inner_height=0.7)
+    # chart.time_scale(visible=True)
+    # chart2 = chart.create_subchart(position='bottom', width=1, height=0.3,sync=True)
+    # line = chart2.create_line(name='m1',color='blue')
+    # line.set(data_plot)
+    # hline = chart2.horizontal_line(0)
+    # chart.legend(visible=True, font_size=14)
+    # chart2.legend(visible=True, font_size=14)
+    # chart2.grid()
+
+    # Columns: time | open | high | low | close | volume
+
+    # chart.set(data_plot)
+    # chart.crosshair(mode='normal', vert_color='#FFFFFF', vert_style='dotted',
+    #                 horz_color='#FFFFFF', horz_style='dotted')
+    # gen_html(data_plot)
+
+    # chart.show(block=True)
+
