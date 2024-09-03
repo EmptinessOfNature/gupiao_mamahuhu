@@ -112,7 +112,7 @@ def merge_signal(data):
         (data["m1"] > 0)
         & (data["m1"].abs() > 1)
         & (data["m2"] < 0)
-        & (is_v(data, col="m2", pre_len=3, post_len=3, direction="bottom"))
+        & (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
         & (data["m1"].abs() >= 1.1 * data["m2"].abs())
     )
     long_start = condition_or(long_start_rules)
@@ -123,7 +123,7 @@ def merge_signal(data):
         (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="down"))
     )
     long_end_rules.append(
-        (is_v(data, col="m2", pre_len=3, post_len=3, direction="top"))
+        (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
     )
     long_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
     long_end = condition_or(long_end_rules)
@@ -139,8 +139,8 @@ def merge_signal(data):
     short_start_rules.append(
         (data["m1"] < 0)
         & (data["m1"].abs() > 1)
-        & (data["m2"] < 0)
-        & (is_v(data, col="m2", pre_len=3, post_len=3, direction="top"))
+        & (data["m2"] > 0)
+        & (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
         & (data["m1"].abs() >= 1.1 * data["m2"].abs())
     )
     short_start = condition_or(short_start_rules)
@@ -151,7 +151,7 @@ def merge_signal(data):
         (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="up"))
     )
     short_end_rules.append(
-        (is_v(data, col="m2", pre_len=3, post_len=3, direction="bottom"))
+        (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
     )
     short_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
     short_end = condition_or(short_end_rules)
@@ -208,9 +208,11 @@ if __name__ == "__main__":
     data = duanxian(data)
     data = merge_signal(data)
     data = huice(data)
+    # data.to_csv('./data_huice/'+code+'.csv')
     draw_line(data, code=code, comment=str(data["profit_rate"].sum()))
 
     print(1)
+    print(data['profit_rate'].sum())
     # data_plot = data[['dt','open','high','low','close','vol','m1']]
     # data_plot.columns=['time','open','high','low','close','volume','m1']
     # data_plot['time'] = data_plot.time.dt.strftime('%Y-%m-%dT%H:%M')
