@@ -1,0 +1,574 @@
+//------------------------限制设置区域-----------------------------
+bool     时间限制开关=0;    //设为0则不限制时间,设为1则启动时间限制
+bool     账号限制开关=1;    //设为0则不限制账号,设为1则启动账号限制
+
+datetime 使用到期时间=D'2023.12.01';    //超过此时间停止使用，只修改日期数字，其他不要动
+string   允许使用账号="310532961,68365631,79366701,60104176,5025744614,66908408,63599660,60107318";      //引号内填写允许使用账号，各账号之间逗号分隔
+
+//------------------------限制设置区域-----------------------------
+input string   广告提示1="学习交流授权：luflying99@gmail.com";//学习交流授权：luflying99@gmail.com
+input string   广告提示2="请配合课程和解析服务使用：123trade.blog";//请配合课程和解析服务使用：123trade.blog
+
+
+#property   strict
+#property indicator_chart_window
+#property indicator_buffers 11
+#property indicator_plots   6    //
+
+#property indicator_label1  "Label1"
+#property indicator_type1   DRAW_COLOR_CANDLES
+#property indicator_color1  clrGreen,clrRed
+#property indicator_style1  STYLE_SOLID
+#property indicator_width1  1
+
+#property indicator_label2  "Support"
+#property indicator_type2   DRAW_ARROW
+#property indicator_color2  clrLimeGreen
+#property indicator_style2  STYLE_SOLID
+#property indicator_width2  1
+
+#property indicator_label3  "Resistance"
+#property indicator_type3   DRAW_ARROW
+#property indicator_color3  clrMagenta
+#property indicator_style3  STYLE_SOLID
+#property indicator_width3  1
+
+
+//--- plot Label2
+#property indicator_type4   DRAW_LINE
+#property indicator_color4  clrNONE
+#property indicator_style4  STYLE_SOLID
+#property indicator_width4  1
+
+#property indicator_type5   DRAW_LINE
+#property indicator_color5  clrNONE
+#property indicator_style5  STYLE_SOLID
+#property indicator_width5  1
+
+#property indicator_label6  "方向"
+#property indicator_type6   DRAW_LINE
+#property indicator_color6  clrNONE
+#property indicator_style6  STYLE_SOLID
+#property indicator_width6  1
+
+
+//------------------------------
+
+
+input int                  periodCCI1     =55;           //Power周期(小)
+input int                  periodCCI2     =144;          //Power周期(大)
+input ENUM_APPLIED_PRICE   priceCCI       =PRICE_TYPICAL;//Power计算价格
+input double               level          =80;           //Power水平值
+
+input bool                 ShowRhythm     =1;
+input int                  inpWprPeriod   =  14;   // Rhythm
+input double               inpLevelUp     = -20;   // Rhythm Level up
+input double               inpLevelDown   = -80;   // Rhythm Level down
+
+input string   显示设置="***************";
+int      hdcci1;
+int      hdcci2;
+int      hdbjatr;
+double   fx[];
+double   cci1[],cci2[];
+double   copen[],chigh[],clow[],cclose[],kys[];
+
+double sup[],res[],trend[];
+//--- indicator handles
+int _wprHandle;
+
+string   shortname="";
+string   biaoshi="静安编程";
+datetime time0;
+datetime lasttime;
+int      bjcs;
+string   cm="";
+int      alertfx=-1;
+double   lfx=-1;
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+
+ENUM_TIMEFRAMES zdtf[10]={0,PERIOD_M5,PERIOD_M15,PERIOD_M30,PERIOD_H1,PERIOD_H4,PERIOD_D1};
+double   dhdcci[10],xhdcci[10];
+int      tffx[10];
+int OnInit()
+  {
+
+   if(MQLInfoInteger(MQL_TESTER))   ChartSetInteger(0,CHART_MODE,CHART_CANDLES);
+
+//--- indicator buffers mapping
+   SetIndexBuffer(0,copen,INDICATOR_DATA);
+   SetIndexBuffer(1,chigh,INDICATOR_DATA);
+   SetIndexBuffer(2,clow,INDICATOR_DATA);
+   SetIndexBuffer(3,cclose,INDICATOR_DATA);
+   SetIndexBuffer(4,kys,INDICATOR_COLOR_INDEX);
+
+   SetIndexBuffer(5,sup,INDICATOR_DATA); PlotIndexSetInteger(1,PLOT_ARROW,158);
+   SetIndexBuffer(6,res,INDICATOR_DATA); PlotIndexSetInteger(2,PLOT_ARROW,158);
+   SetIndexBuffer(7,trend,INDICATOR_CALCULATIONS);
+
+   SetIndexBuffer(8,cci1,INDICATOR_DATA);
+   SetIndexBuffer(9,cci2,INDICATOR_DATA);
+   SetIndexBuffer(10,fx,INDICATOR_DATA);
+
+//--- indicators handles allocation
+   _wprHandle=iWPR(_Symbol,0,inpWprPeriod);
+
+   for(int i=0;i<11;i++)
+   {
+      PlotIndexSetDouble(i,PLOT_EMPTY_VALUE,EMPTY_VALUE);   //EMPTY_VALUE 则可以置0
+      //PlotIndexSetDouble(i,PLOT_EMPTY_VALUE,0.0);           //设0 则置0时不显示
+      PlotIndexSetInteger(i,PLOT_DRAW_BEGIN,periodCCI2);
+   }
+
+   PlotIndexSetString(0,PLOT_LABEL,"Open;High;Low;Close");
+   PlotIndexSetString(1,PLOT_LABEL,"("+IntegerToString(periodCCI1)+")");
+   PlotIndexSetString(2,PLOT_LABEL,"("+IntegerToString(periodCCI2)+")");
+
+   hdcci1=iCCI(NULL,0,periodCCI1,priceCCI);
+   hdcci2=iCCI(NULL,0,periodCCI2,priceCCI);
+
+   for(int i=0;i<=6;i++)
+   {
+      xhdcci[i]=iCCI(NULL,zdtf[i],periodCCI1,priceCCI);
+      dhdcci[i]=iCCI(NULL,zdtf[i],periodCCI2,priceCCI);
+   }
+   return(INIT_SUCCEEDED);
+  }
+void OnDeinit(const int reason)
+  {
+   EventKillTimer();
+   if(reason==2)  ObjectsDeleteAll(0,-1,-1);
+
+   ObjectsDeleteAll(0,biaoshi,-1,-1);
+   ObjectsDeleteAll(0,0,OBJ_BUTTON);
+
+  }
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+  {
+
+   if(limitcontrl2()==false)  return 0;
+
+   int to_copy;
+   if(prev_calculated>rates_total || prev_calculated<0) to_copy=rates_total;
+   else
+     {
+      to_copy=rates_total-prev_calculated;
+      if(prev_calculated>0) to_copy++;
+     }
+
+   if(CopyBuffer(hdcci1,0,0,to_copy,cci1)<=0) return(0);
+   if(CopyBuffer(hdcci2,0,0,to_copy,cci2)<=0) return(0);
+
+   int   limit=rates_total-prev_calculated;
+
+
+   if(prev_calculated>0)   limit= prev_calculated-1;
+   else limit=(int)MathMax(prev_calculated-1,1);
+
+
+   if(Bars(_Symbol,_Period)<rates_total) return(prev_calculated);
+   if(BarsCalculated(_wprHandle)<rates_total) return(prev_calculated);
+   double _wprVal[1];
+   //int i=(int)MathMax(prev_calculated-1,1);
+
+   for(int i=limit; i<rates_total && !IsStopped(); i++)
+   {
+      if(ShowRhythm)
+      {
+         trend[i]=(i>0) ? trend[i-1]: 0;
+         int _wprCopied=CopyBuffer(_wprHandle,0,time[i],1,_wprVal);
+         if(_wprCopied== 1 && _wprVal[0]>inpLevelUp)    trend[i] =  1;
+         if(_wprCopied== 1 && _wprVal[0]<inpLevelDown)  trend[i] = -1;
+         sup[i] = (i>0) ? sup[i-1] : close[i];
+         res[i] = (i>0) ? res[i-1] : close[i];
+         if(i>0 && trend[i]!=trend[i-1])
+           {
+            if(trend[i] ==  1) res[i] = high[i];
+            if(trend[i] == -1) sup[i] = low[i];
+           }
+      }
+      else
+      {
+         sup[i]=EMPTY_VALUE;
+         res[i]=EMPTY_VALUE;
+      }
+
+      fx[i]=EMPTY_VALUE;
+      copen[i]=EMPTY_VALUE;
+      chigh[i]=EMPTY_VALUE;
+      clow[i]=EMPTY_VALUE;
+      cclose[i]=EMPTY_VALUE;
+      kys[i]=EMPTY_VALUE;
+
+      if(i>=2)
+      {
+         lfx=fx[i-1];
+         if(lfx==0 && cci1[i-1]<-MathAbs(level) && cci1[i-2]>-MathAbs(level))  //下穿-80
+         {
+            if(cci2[i-1]>-MathAbs(level))   lfx=EMPTY_VALUE;
+            else lfx=1;
+         }
+         if(lfx==1 && cci1[i-1]>MathAbs(level) && cci1[i-2]<MathAbs(level))  //上穿80
+         {
+            if(cci2[i-1]<MathAbs(level))   lfx=EMPTY_VALUE;
+            else lfx=0;
+         }
+      }
+
+      if((cci1[i]>MathAbs(level) && cci2[i]>MathAbs(level)) || (cci1[i]>-MathAbs(level) && lfx==0))
+      {
+         copen[i]=open[i];
+         chigh[i]=high[i];
+         clow[i]=low[i];
+         cclose[i]=close[i];
+         kys[i]=0;
+         fx[i]=0;
+      }
+
+      if((cci1[i]<-MathAbs(level) && cci2[i]<-MathAbs(level))  || (cci1[i]<MathAbs(level) && lfx==1))
+      {
+         copen[i]=open[i];
+         chigh[i]=high[i];
+         clow[i]=low[i];
+         cclose[i]=close[i];
+
+         kys[i]=1;
+         fx[i]=1;
+      }
+   }
+
+   if(time0!=iTime(NULL,0,0))
+   {
+      if(fx[rates_total-2]==0 && fx[rates_total-3]!=0)
+      {
+         cm=Symbol()+"："+getPeriodStr()+"做多";
+         Alert(cm);
+      }
+      if(fx[rates_total-2]==1 && fx[rates_total-3]!=1)
+      {
+         cm=Symbol()+"："+getPeriodStr()+"做空";
+         Alert(cm);
+      }
+   }
+
+   for(int i=1;i<=6;i++)
+   {
+      tffx[i]=getfx(i,0);
+   }
+
+   显示按键();
+   ChartRedraw();
+   time0=iTime(NULL,0,0);
+   pre=prev_calculated;
+//--- return value of prev_calculated for next call
+   return(rates_total);
+  }
+int   pre=0;
+int   tx=3;
+void OnTimer()
+  {
+
+
+  }
+string getPeriodStr()
+ {
+   string s = "";
+   s = EnumToString((ENUM_TIMEFRAMES)(Period()));
+   s = StringSubstr(s,7,StringLen(s)-1);
+   return s;
+ }
+
+//+------------------------------------------------------------------+
+
+double   gethandBuf(int hand,int index,int mode=0)
+{
+   double mo[1];
+   if(CopyBuffer(hand,mode,index,1,mo)<0)
+   {
+      return(0.0);
+   }
+   return(mo[0]);
+}
+bool yes=true;
+int   getfx(int tfxh,int index)
+{
+   int      tbar=iBars(NULL,zdtf[tfxh])-1;
+   double   dcci[],xcci[];
+   ArrayResize(xcci,tbar+1);
+   ArrayResize(dcci,tbar+1);
+
+   CopyBuffer((int)xhdcci[tfxh],0,0,tbar+1,xcci);
+   CopyBuffer((int)dhdcci[tfxh],0,0,tbar+1,dcci);
+
+   ArraySetAsSeries(xcci,true);
+   ArraySetAsSeries(dcci,true);
+
+   //Print(ArrayGetAsSeries(xcci));
+   //Print(xcci[0]);
+   //if(yes) Print(ArraySize(xcci),"，index=",index);yes=false;
+   if(index>=ArraySize(xcci)) return -1;
+   if(xcci[index]>MathAbs(level) && dcci[index]>MathAbs(level))   return 0;
+   if(xcci[index]<-MathAbs(level) && dcci[index]<-MathAbs(level))   return 1;
+
+   int pfx=-1,nfx=-1;
+   int b0=0;
+   for(int i=index+1;i<tbar-1;i++)
+   {
+      if(xcci[i]>MathAbs(level) && dcci[i]>MathAbs(level))   {pfx=0;b0=i;break;}
+      else if(xcci[i]<-MathAbs(level) && dcci[i]<-MathAbs(level))   {pfx=1;b0=i;break;}
+   }
+
+   nfx=pfx;
+   for(int i=b0-1;i>=0;i--)
+   {
+      if((pfx==0 && xcci[i]<-MathAbs(level)) || (pfx==1 && xcci[i]>MathAbs(level)))
+      {
+         nfx=-1;break;
+      }
+   }
+
+   //Print("时间=",iTime(NULL,zdtf[tfxh],b0),"，文向=",pfx,"，当前方向=",nfx);
+   return nfx;
+}
+void creatButton(
+                   string  名称,
+              ENUM_OBJECT  按键类型,
+                   string  弹起内容,
+                   string  按下内容,
+                   //int     窗口编号,
+                   int     角落,
+                   int     横坐标,
+                   int     坚坐标,
+                   int     按键宽度,
+                   int     按键高度,
+                   //string  按键字体,
+
+                   int     字体大小,
+                   color   字体颜色,
+                   color   背景颜色,
+                   //color   边框颜色,
+                   color   按下颜色,
+                   int     保持状态
+                 )
+ {
+
+   按下内容=弹起内容;
+   if(ObjectFind(0,名称)<0)
+   {
+      ObjectCreate    (0,名称,按键类型,0,0,0);
+      ObjectSetString (0,名称,OBJPROP_TEXT,     弹起内容 );
+      ObjectSetInteger(0,名称,OBJPROP_BGCOLOR,  背景颜色 );
+      ObjectSetInteger(0,名称,OBJPROP_BORDER_COLOR,背景颜色);
+      ObjectSetInteger(0,名称,OBJPROP_SELECTABLE,0);
+      ObjectSetInteger(0,名称,OBJPROP_SELECTED,0);
+      ObjectSetInteger(0,名称,OBJPROP_ALIGN,ALIGN_CENTER);
+   }
+   else
+   {
+      if(按键类型==OBJ_BUTTON)
+      {
+         if(ObjectGetInteger(0,名称,OBJPROP_STATE))
+         {
+            ObjectSetInteger(0,名称,OBJPROP_BGCOLOR,  按下颜色 );
+            ObjectSetInteger(0,名称,OBJPROP_BORDER_COLOR,按下颜色 );
+            ObjectSetString (0,名称,OBJPROP_TEXT,     按下内容 );
+         }
+         if(ObjectGetInteger(0,名称,OBJPROP_STATE)==0 || 保持状态==0)
+         {
+            ObjectSetInteger(0,名称,OBJPROP_BGCOLOR,  背景颜色 );
+            ObjectSetInteger(0,名称,OBJPROP_BORDER_COLOR,背景颜色 );
+            ObjectSetString (0,名称,OBJPROP_TEXT,     弹起内容 );
+            ObjectSetInteger(0,名称,OBJPROP_STATE,0);
+         }
+      }
+   }
+
+   ObjectSetInteger(0,名称,OBJPROP_CORNER,    角落);
+   ObjectSetInteger(0,名称,OBJPROP_XDISTANCE,横坐标);
+   ObjectSetInteger(0,名称,OBJPROP_YDISTANCE,坚坐标);
+   ObjectSetInteger(0,名称,OBJPROP_XSIZE,    按键宽度 );
+   ObjectSetInteger(0,名称,OBJPROP_YSIZE,    按键高度 );
+   ObjectSetString (0,名称,OBJPROP_FONT,     "黑体" );
+   ObjectSetInteger(0,名称,OBJPROP_FONTSIZE, 字体大小 );
+   ObjectSetInteger(0,名称,OBJPROP_COLOR,    字体颜色 );
+ }
+
+enum ENUM_CONER
+  {
+   左上角=0,
+   右上角=1,
+   左下角=2,
+   右下角=3,
+  };
+ENUM_CONER  显示角落=1;
+input   int   kd=90; //单元格宽度
+input   int   gd=30; //单元格高度
+input int   textdx1=9;       //单元格文字大小
+void 显示按键()
+ {
+   ChartSetInteger(0,CHART_FOREGROUND,false);
+   int   纵向系数=1,横向系数=1;
+
+   int   dx1=textdx1;
+
+   int   zd=2; //列间隔
+   int   hd=1; //行间隔
+   int   xx=60; //X轴起点
+   int   yy=60; //Y轴起点
+
+
+   switch(显示角落)
+   {
+      case  0 :   {xx=5;         yy=20;         横向系数=1;  纵向系数=1;  break;}
+      case  1 :   {xx=5;         yy=(gd+hd)*5;/*+textyd+2*texthj;*/         横向系数=1; 纵向系数=-1;  break;}
+      case  2 :   {xx=2*kd;      yy=(gd+hd)*2;  横向系数=1;  纵向系数=-1; break;}
+      case  3 :   {xx=1*(kd+2);  yy=(gd+hd)*5;  横向系数=-1; 纵向系数=-1; break;}
+   }
+   creatButton("背景",OBJ_BUTTON,"","",显示角落, xx-横向系数, yy, (3*kd+2*zd)+1, (gd*5+hd*4),dx1,White, clback,press,0);
+
+   creatButton("列1-1",OBJ_BUTTON,"123Power","123Power",显示角落, xx+横向系数,yy, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列1-2",OBJ_BUTTON,"周期1","",显示角落, xx+横向系数,yy+1*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列1-3",OBJ_BUTTON,"周期2","",显示角落, xx+横向系数,yy+2*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列1-4",OBJ_BUTTON,"周期3","",显示角落, xx+横向系数,yy+3*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列1-5",OBJ_BUTTON,"强度","",显示角落, xx+横向系数,yy+4*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clbt,press,0);
+   //creatButton("列1-6",OBJ_BUTTON,"学习交流授权：luflying99@gmail.com","强度",显示角落, xx+横向系数,yy+5*(gd+hd)*纵向系数, kd*3, gd,dx1,cltext, cl1,press,0);
+   //creatButton("列1-7",OBJ_BUTTON,"请配合课程和解析服务使用：https://123trade.blog/","强度",显示角落, xx+横向系数,yy+6*(gd+hd)*纵向系数, kd*3, gd,dx1,cltext, cl1,press,0);
+
+
+   creatButton("列2-1",OBJ_BUTTON,"日内模型","",显示角落, xx+=横向系数*(kd+zd),yy, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列2-2",OBJ_BUTTON,getTimeframetoStr(zdtf[1]),"",显示角落, xx,yy+1*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[1]),press,0);
+   creatButton("列2-3",OBJ_BUTTON,getTimeframetoStr(zdtf[2]),"",显示角落, xx,yy+2*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[2]),press,0);
+   creatButton("列2-4",OBJ_BUTTON,getTimeframetoStr(zdtf[3]),"",显示角落, xx,yy+3*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[3]),press,0);
+   creatButton("列2-5",OBJ_BUTTON,getqr(tffx[1],tffx[2],tffx[3]),"",显示角落, xx,yy+4*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clqr,press,0);
+
+   creatButton("列3-1",OBJ_BUTTON,"周内模型","",显示角落, xx+=横向系数*(kd+1),yy, kd, gd,dx1,cltext, clbt,press,0);
+   creatButton("列3-2",OBJ_BUTTON,getTimeframetoStr(zdtf[4]),"",显示角落, xx,yy+1*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[4]),press,0);
+   creatButton("列3-3",OBJ_BUTTON,getTimeframetoStr(zdtf[5]),"",显示角落, xx,yy+2*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[5]),press,0);
+   creatButton("列3-4",OBJ_BUTTON,getTimeframetoStr(zdtf[6]),"",显示角落, xx,yy+3*(gd+hd)*纵向系数, kd, gd,dx1,cltext, getys(tffx[6]),press,0);
+   creatButton("列3-5",OBJ_BUTTON,getqr(tffx[4],tffx[5],tffx[6]),"",显示角落, xx,yy+4*(gd+hd)*纵向系数, kd, gd,dx1,cltext, clqr,press,0);
+
+   //show();
+ }
+color clback=clrDimGray;
+color press=Red;
+
+color cltext=clrWhite;  //单元格文字颜色
+color clbt=clrLightSlateGray; //行、列 标题颜色
+input color clup=clrDarkSeaGreen ;     //周期多头颜色
+input color cldw=clrDarkSalmon;     //周期空头颜色
+input color clnon=clrSilver;        //周期无方向颜色
+
+string getTimeframetoStr(ENUM_TIMEFRAMES chektf)
+ {
+   string s = "";
+   if(chektf==PERIOD_CURRENT)
+         s = EnumToString((ENUM_TIMEFRAMES)(Period()));
+   else  s = EnumToString(chektf);
+
+   s = StringSubstr(s,7,StringLen(s)-1);
+   return s;
+ }
+color getys(int xfx)
+{
+   switch(xfx)
+     {
+      case  0: return clup; break;
+      case  1: return cldw; break;
+      case -1: return clnon; break;
+     }
+   return clrNONE;
+}
+color clqr=clrCadetBlue;
+string   getqr(int x1,int x2,int x3)
+{
+
+   if(x1==x2 && x2==x3 && x3!=-1) return "强";
+   else if( (x1!=0 && x2==0 && x3==0) || (x1==0 && x2!=0 && x3==0) || (x1==0 && x2==0 && x3!=0) //有两红
+     ||(x1!=1 && x2==1 && x3==1) || (x1==1 && x2!=1 && x3==1) || (x1==1 && x2==1 && x3!=1)) //有两绿
+     return "中";
+   else return "弱";
+
+   clqr=clrSteelBlue;
+   return "";
+}
+
+/*
+color    广告文字颜色      =clrViolet;
+int   textsize       =10;           //文字大小
+int   textxd         =10;          //文字X轴起点
+int   textyd         =5;           //文字Y轴起点
+int   texthj         =22;          //文字行距
+void  show()
+{
+   if(MQLInfoInteger(MQL_TESTER)==false) ChartRedraw();
+   string   line[50];
+   string   fgx="--------------------------------";
+   int      pp=1;
+
+
+   line[pp++]=广告提示1;
+   line[pp++]=广告提示2;
+
+   int   xx=textxd,yy=textyd;
+
+   for(int i=1;i<pp;i++)
+   {
+      drawlabel(biaoshi+"line"+IntegerToString(i),xx,yy,line[i],textsize,广告文字颜色,1);
+      yy=yy+texthj;
+   }
+
+}
+*/
+
+void drawlabel ( string 名称, int X轴, int Y轴, string 内容, int 大小,color 颜色, int 原点=0)
+{
+   ObjectCreate (0,名称, OBJ_LABEL, 0, 0, 0, 0, 0 );
+   ObjectSetInteger(0,名称, OBJPROP_CORNER,    原点 );
+   ObjectSetInteger(0,名称, OBJPROP_XDISTANCE, X轴 );
+   ObjectSetInteger(0,名称, OBJPROP_YDISTANCE, Y轴 );
+
+   ObjectSetString(0,名称,OBJPROP_TEXT,内容);
+   ObjectSetString(0,名称,OBJPROP_FONT,"Arial"); //Arial
+   ObjectSetInteger(0,名称, OBJPROP_COLOR, 颜色);
+   ObjectSetInteger(0,名称, OBJPROP_FONTSIZE, 大小);
+   ObjectSetInteger(0,名称,OBJPROP_SELECTABLE,0);
+
+   int 定位=0;
+   switch(原点)
+   {
+      case  0: 定位=ANCHOR_LEFT_UPPER;    break;
+      case  1: 定位=ANCHOR_LEFT_LOWER;    break;
+      case  2: 定位=ANCHOR_RIGHT_LOWER;   break;
+      case  3: 定位=ANCHOR_RIGHT_UPPER;   break;
+   }
+   ObjectSetInteger(0,名称,OBJPROP_ANCHOR,定位);
+}
+bool  limitcontrl2()
+{
+   if(时间限制开关 && TimeLocal()>使用到期时间 )
+   {
+      Alert("时间到期");
+      return(false);
+   }
+   if(账号限制开关 && StringFind(允许使用账号,IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)),0)<0)
+   {
+      Alert("账号限制");
+      return(false);
+   }
+
+   return(true);
+}
