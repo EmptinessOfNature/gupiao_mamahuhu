@@ -107,6 +107,7 @@ class Longport_agent:
             "timestamp": [item.timestamp for item in resp],
         }
         data = pd.DataFrame(ret)
+        data[['open','close','high','low','vol','turnover']] = data[['open','close','high','low','vol','turnover']].astype('float64')
         return data
 
     def get_date(self, date, resp):
