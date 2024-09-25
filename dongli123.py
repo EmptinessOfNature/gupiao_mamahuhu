@@ -37,14 +37,25 @@ def calc_dongli_123(data):
         nfx = -1
         b0 = 0
         for i in range(index+1,len(data)):
-            
-
-
-
+            if xcci[i]>level and dcci[i]>level:
+                pfx=0
+                b0=i
+                break
+            elif xcci[i]<-level and dcci[i]<-level:
+                pfx=1
+                b0=i
+                break
+        nfx=pfx
+        for i in range(b0-1,0):
+            if (pfx==0 and xcci[i]<-level) or (pfx==1 and xcci[i]>level):
+                nfx=-1
+                break
+        return nfx
 
     level = 80
     data['fx'] = np.nan
     data['kys'] = np.nan
+    tffx=[]
     data['cci1'] = ta.trend.cci(data['high'], data['low'], data['close'], window=55, constant=0.015)
     data['cci2'] = ta.trend.cci(data['high'], data['low'], data['close'], window=144, constant=0.015)
     for i in range(len(data)):
@@ -67,12 +78,20 @@ def calc_dongli_123(data):
         if ((data.loc[i,'cci1']<-level and data.loc[i,'cci2']<-level) or (data.loc[i,'cci1']<level and lfx==1)):
             data.loc[i,'kys']=1
             data.loc[i,'fx']=1
-    for i in range(len(data)):
+    for j in len(data):
+        for i in range(len(zdtf)):
+            tffx[i] = getfx(data,i, 0,j)
+
+# tffx是计算颜色的输入
+def calc_tffx():
+    tffx=[]
+    for i in range(6):
         tffx[i] = getfx(i, 0)
+    return tffx
+
+
 
 
 if __name__=='__main__':
     agent = Longport_agent()
-    data = agent.get_data_1D("TQQQ")
-    data['CCI'] = ta.trend.cci(data['high'], data['low'], data['close'], window=14, constant=0.015)
-    print(1)
+  
