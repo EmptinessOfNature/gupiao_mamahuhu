@@ -110,6 +110,22 @@ class Longport_agent:
         data[['open','close','high','low','vol','turnover']] = data[['open','close','high','low','vol','turnover']].astype('float64')
         return data
 
+    def get_data_5min(self, code, count=1000):
+        code = code + ".US"
+        resp = self.ctx.candlesticks(code, Period.Min_1, count, AdjustType.NoAdjust)
+        ret = {
+            "open": [item.open for item in resp],
+            "close": [item.close for item in resp],
+            "high": [item.high for item in resp],
+            "low": [item.low for item in resp],
+            "vol": [item.volume for item in resp],
+            "turnover": [item.turnover for item in resp],
+            "timestamp": [item.timestamp for item in resp],
+        }
+        data = pd.DataFrame(ret)
+        data[['open','close','high','low','vol','turnover']] = data[['open','close','high','low','vol','turnover']].astype('float64')
+        return data
+
     def get_date(self, date, resp):
         y = int(date[0:4])
         m = int(date[4:6])
@@ -152,6 +168,6 @@ if __name__ == "__main__":
     # print(get_atr_longport('NVDA','20240417'))
     agent = Longport_agent()
     resp = agent.get_resp_1D("TQQQ")
-    data = agent.get_data_1D("TQQQ")
+    data = agent.get_data_5min("TQQQ")
     jw = agent.get_jw_longport("TQQQ", "20240417")
     print(1)
