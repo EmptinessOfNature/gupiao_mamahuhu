@@ -3,6 +3,7 @@ from MyTT import *
 import plotly.graph_objects as go
 import pandas as pd
 from plotly.subplots import make_subplots
+import ta
 
 
 def tdx_raw2_kline(r_path, period):
@@ -103,6 +104,10 @@ def double_macd(data, short1=55, long1=89, m1=1, short2=13, long2=21, m2=1):
     data['macd_sell_signal'] = macd_sell_sig
     return data
 
+def double_cci(data,window1=144,window2=55):
+    data['xcci'] = ta.trend.cci(data['high'], data['low'], data['close'], window=window1, constant=0.015)
+    data['dcci'] = ta.trend.cci(data['high'], data['low'], data['close'], window=window2, constant=0.015)
+    return data
 
 def jw(data):
     # STICKLINE(JW >= 80 AND JW < MAJW AND REF(JW, 1) > REF(MAJW, 1), JW + 20, 80, 5, 0) ,COLOR00FF00;
@@ -204,13 +209,13 @@ def draw_line(data, code="",comment=""):
         name="空单结束",
     )
     fig = make_subplots(
-        rows=2,
+        rows=3,
         cols=1,
         # row_heights=[1,0.5,0.5,0.5],
         shared_xaxes=True,
         vertical_spacing=0.03,
         subplot_titles=(""),
-        row_width=[1, 1],
+        row_width=[1, 1,1],
     )
 
     # fig = go.Figure(data=[kline_1D, trace_long_buy, trace_short_buy])
@@ -221,6 +226,8 @@ def draw_line(data, code="",comment=""):
     fig.add_trace(trace_short_sell, row=1, col=1)
     fig.add_trace(go.Scatter(x=data["dt_period"], y=data["m1"]), row=2, col=1)
     fig.add_trace(go.Scatter(x=data["dt_period"], y=data["m2"]), row=2, col=1)
+    fig.add_trace(go.Scatter(x=data["dt_period"], y=data["xcci"]), row=3, col=1)
+    fig.add_trace(go.Scatter(x=data["dt_period"], y=data["dcci"]), row=3, col=1)
     fig.add_trace(
         go.Scatter(
             x=long_buy_signals["dt_period"], y=[0] * len(long_buy_signals), mode="markers"
