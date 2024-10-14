@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import datetime  # For datetime objects
 import os.path  # To manage paths
 import sys  # To find out the script name (in argv[0])
+from datetime import datetime
 
 # Import the backtrader platform
 import backtrader as bt
@@ -30,17 +31,21 @@ class TestStrategy(bt.Strategy):
         self.buycomm = None
 
         # Add a MovingAverageSimple indicator
-        self.sma = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.maperiod)
+        # self.sma = bt.indicators.SimpleMovingAverage(
+        #     self.datas[0], period=self.params.maperiod)
 
         # Indicators for the plotting show
-        bt.indicators.ExponentialMovingAverage(self.datas[0], period=25)
-        bt.indicators.WeightedMovingAverage(self.datas[0], period=25,
-                                            subplot=True)
-        bt.indicators.StochasticSlow(self.datas[0])
-        bt.indicators.MACDHisto(self.datas[0])
-        rsi = bt.indicators.RSI(self.datas[0])
-        bt.indicators.SmoothedMovingAverage(rsi, period=10)
+        self.ema8 = bt.indicators.ExponentialMovingAverage(self.datas[0], period=8)
+        self.ema13 = bt.indicators.ExponentialMovingAverage(self.datas[0], period=13)
+        self.macd1 = bt.indicators.MACDHisto(self.data,period_me1=55,period_me2=89,period_signal=1)
+        self.macd2 = bt.indicators.MACDHisto(self.data, period_me1=13, period_me2=21, period_signal=1)
+        self.macd2.plotinfo.plotmaster = self.macd1
+        # bt.indicators.WeightedMovingAverage(self.datas[0], period=25,
+        #                                     subplot=True)
+        # bt.indicators.StochasticSlow(self.datas[0])
+        # bt.indicators.MACDHisto(self.datas[0])
+        # rsi = bt.indicators.RSI(self.datas[0])
+        # bt.indicators.SmoothedMovingAverage(rsi, period=10)
         bt.indicators.ATR(self.datas[0], subplot=True)
 
     def notify_order(self, order):
@@ -93,7 +98,8 @@ class TestStrategy(bt.Strategy):
         if not self.position:
 
             # Not yet ... we MIGHT BUY if ...
-            if self.dataclose[0] > self.sma[0]:
+            # if self.dataclose[0] > self.sma[0]:
+            if self.dataclose[-1] < self.ema8[-1] and self.dataclose[0]>self.ema8[0]:
 
                 # BUY, BUY, BUY!!! (with all possible default parameters)
                 self.log('BUY CREATE, %.2f' % self.dataclose[0])
@@ -103,7 +109,7 @@ class TestStrategy(bt.Strategy):
 
         else:
 
-            if self.dataclose[0] < self.sma[0]:
+            if self.dataclose[-1] > self.ema8[-1] and self.dataclose[0]<self.ema8[0]:
                 # SELL, SELL, SELL!!! (with all possible default parameters)
                 self.log('SELL CREATE, %.2f' % self.dataclose[0])
 
@@ -124,14 +130,16 @@ if __name__ == '__main__':
     datapath = os.path.join(modpath, './data_bktrade/orcl-1995-2014.txt')
 
     # Create a Data Feed
-    data = bt.feeds.YahooFinanceCSVData(
-        dataname=datapath,
-        # Do not pass values before this date
-        fromdate=datetime.datetime(2014, 1, 1),
-        # Do not pass values before this date
-        todate=datetime.datetime(2014, 12, 30),
-        # Do not pass values after this date
-        reverse=False)
+    # data = bt.feeds.YahooFinanceCSVData(
+    #     dataname=datapath,
+    #     # Do not pass values before this date
+    #     fromdate=datetime.datetime(2014, 1, 1),
+    #     # Do not pass values before this date
+    #     todate=datetime.datetime(2014, 12, 30),
+    #     # Do not pass values after this date
+    #     reverse=False)
+
+    data = bt.feeds.YahooFinanceData(dataname='YHOO', fromdate=datetime(2020, 1, 1), todate=datetime(2024, 10, 10))
 
     # Add the Data Feed to Cerebro
     cerebro.adddata(data)
@@ -155,4 +163,4 @@ if __name__ == '__main__':
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
 
     # Plot the result
-    cerebro.plot()
+    cerebro.plot(style='candle')
