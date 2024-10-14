@@ -1,6 +1,6 @@
 import pandas as pd
 
-from macd_utils import tdx_raw2_kline, double_macd, jw, duanxian, draw_line
+from macd_utils import tdx_raw2_kline, double_macd, jw, duanxian, draw_line,double_cci
 
 # from lightweight_charts import Chart
 from gen_page import gen_html
@@ -108,24 +108,29 @@ def merge_signal(data):
     #     & (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="up"))
     #     & (speed(data, col="m2", length=2) > 0.1)
     # )
-    long_start_rules.append(
-        (data["m1"] > 0)
-        & (data["m1"].abs() > 1)
-        & (data["m2"] < 0)
-        & (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
-        & (data["m1"].abs() >= 1.1 * data["m2"].abs())
-    )
+    # long_start_rules.append(
+    #     (data["m1"] > 0)
+    #     & (data["m1"].abs() > 1)
+    #     & (data["m2"] < 0)
+    #     & (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
+    #     & (data["m1"].abs() >= 1.1 * data["m2"].abs())
+    # )
+    # macd+doublecci的策略
+    long_start_rules.append((data['m1']>0) & (data['dcci']>=80) & (data['xcci']>=80))
     long_start = condition_or(long_start_rules)
 
     # 平多仓策略
     long_end_rules = []
-    long_end_rules.append(
-        (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="down"))
-    )
-    long_end_rules.append(
-        (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
-    )
-    long_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
+    # long_end_rules.append(
+    #     (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="down"))
+    # )
+    # long_end_rules.append(
+    #     (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
+    # )
+    # long_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
+    # macd+doublecci的策略
+    long_end_rules.append((data['m1']<=0))
+    long_end_rules.append((data['dcci']<80) | (data['xcci']<80))
     long_end = condition_or(long_end_rules)
 
     # 开空仓策略
@@ -136,24 +141,30 @@ def merge_signal(data):
     #     & (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="down"))
     #     & (speed(data, col="m2", length=2) > 0.1)
     # )
-    short_start_rules.append(
-        (data["m1"] < 0)
-        & (data["m1"].abs() > 1)
-        & (data["m2"] > 0)
-        & (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
-        & (data["m1"].abs() >= 1.1 * data["m2"].abs())
-    )
+    # short_start_rules.append(
+    #     (data["m1"] < 0)
+    #     & (data["m1"].abs() > 1)
+    #     & (data["m2"] > 0)
+    #     & (is_v(data, col="m2", pre_len=3, post_len=2, direction="top"))
+    #     & (data["m1"].abs() >= 1.1 * data["m2"].abs())
+    # )
+    # macd+doublecci的策略
+    short_start_rules.append((data['m1']<0) & (data['dcci']<=-80) & (data['xcci']<=-80))
     short_start = condition_or(short_start_rules)
 
     # 平空仓策略
     short_end_rules = []
-    short_end_rules.append(
-        (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="up"))
-    )
-    short_end_rules.append(
-        (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
-    )
-    short_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
+    # short_end_rules.append(
+    #     (is_chuan(data, col="m2", pre_len=1, post_len=1, thresh=0, direction="up"))
+    # )
+    # short_end_rules.append(
+    #     (is_v(data, col="m2", pre_len=3, post_len=2, direction="bottom"))
+    # )
+    # short_end_rules.append(speed(data, col="m2", length=2).abs() < 0.01)
+    # macd+doublecci的策略
+    short_end_rules.append((data['m1']>=0))
+    short_end_rules.append((data['dcci']>-80) | (data['xcci']>-80))
+
     short_end = condition_or(short_end_rules)
 
     data["long_start"], data["long_end"], data["short_start"], data["short_end"] = (
@@ -199,6 +210,13 @@ def huice(data):
         ) / data.loc[index, "close"]
     return data
 
+def drop_lianxu_signals(data,cols):
+    for c in cols:
+        # 创建一个辅助列，用于标记哪些 '1' 需要被转换成 '0'
+        temp = (data[c] == True) & (data[c].shift(1) == True)
+        # 将标记为 True 的位置的 '1' 转换成 '0'
+        data.loc[temp, c] = False
+    return data
 
 if __name__ == "__main__":
     code = "TQQQ"
@@ -206,7 +224,9 @@ if __name__ == "__main__":
     data = double_macd(data)
     data = jw(data)
     data = duanxian(data)
+    data = double_cci(data)
     data = merge_signal(data)
+    data = drop_lianxu_signals(data, cols=['long_start', 'long_end', 'short_start', 'short_end'])
     data = huice(data)
     # data.to_csv('./data_huice/'+code+'.csv')
     draw_line(data, code=code, comment=str(data["profit_rate"].sum()))
